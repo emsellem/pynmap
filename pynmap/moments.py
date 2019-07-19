@@ -90,6 +90,7 @@ def plot_sigma(Rbin, v, s, Rmin=0., Rmax=None, Vmax=None,
     plt.xlim(Rmin, Rmax)
     plt.ylim(0, Vmax)
     plt.title("Model = %s - %s"%(snapname, suffix))
+    plt.tight_layout()
     if save:
         plt.savefig(figure_folder+"Fig_%s_%s.png"%(snapname, suffix))
 

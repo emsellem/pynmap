@@ -182,6 +182,10 @@ class snapshot(object):
             print("Opening Input file {0} ".format(
                    filename))
         self.pos, self.vel, self.mass, self.age, self.ZH = dic_io[self.snap_type](filename)
+        if self.pos is None:
+            print("ERROR: did not succeed to read positions and velocities - Aborting")
+            return
+            
         self.npart = len(self.mass)
         # the original position, velocities
         self._pos_orig = copy.copy(self.pos)

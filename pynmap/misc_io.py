@@ -43,18 +43,21 @@ def read_ascii_files(filename):
         try:
             data = np.loadtxt(filename).T
             if data.shape[0] == 7:
+                print("Found 7 columns, will not read age and Z/H")
                 x, y, z, vx, vy, vz, mass = data
                 age = np.zeros_like(mass)
                 ZH = np.zeros_like(mass)
             elif data.shape[0] == 8:
+                print("Found 8 columns, will not read Z/H")
                 x, y, z, vx, vy, vz, mass, age = data
                 ZH = np.zeros_like(mass)
             elif data.shape[0] == 9:
+                print("Found 9 columns, will read all including age and Z/H")
                 x, y, z, vx, vy, vz, mass, age, ZH = data
             else:
                 print("ERROR: the input file should at least "
                       "contain 7 columns or no more than 9")
-                return [None]*3, [None]*3, [None], [None], [None]
+                return None, None, None, None, None
 
             pos = np.vstack((x, y, z)).T
             vel = np.vstack((vx, vy, vz)).T
@@ -65,7 +68,7 @@ def read_ascii_files(filename):
 
     else:
         print("Input file not found: {0}".format(filename))
-        return [None]*3, [None]*3, [None], [None], [None]
+        return None, None, None, None, None
 
 def SSPMass(afile):
     """
