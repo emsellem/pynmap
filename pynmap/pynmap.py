@@ -114,7 +114,7 @@ class snapshot(object):
     """
     def __init__(self, folder="", snap_name=None, 
             snap_type="ascii",
-            distance=10.0, MLrecipe="Adriano",
+            distance=10.0, MLrecipe="SSPs",
             inclination=0., PA=0.,
             verbose=True,
             info="Maps"):
@@ -141,7 +141,7 @@ class snapshot(object):
         ##=== Some useful number
         self.distance = distance # Galaxy distance in Mpc
         self.pc_per_arcsec = self.distance * np.pi / 0.648  # Conversion arcsec => pc (pc per arcsec)
-        self.MLrecipe = "Adriano"
+        self.MLrecipe = MLrecipe
 
         ##=== angles
         self._PA_orig = PA  # PA at origin
@@ -181,7 +181,8 @@ class snapshot(object):
         if self.verbose:
             print("Opening Input file {0} ".format(
                    filename))
-        self.pos, self.vel, self.mass, self.age, self.ZH = dic_io[self.snap_type](filename)
+        self.pos, self.vel, self.mass, self.age, self.MH = dic_io[self.snap_type](filename)
+
         if self.pos is None:
             print("ERROR: did not succeed to read positions and velocities - Aborting")
             return
@@ -191,8 +192,12 @@ class snapshot(object):
         self._pos_orig = copy.copy(self.pos)
         self._vel_orig = copy.copy(self.vel)
         # Compute the luminosity
-        self.ML = compute_ML(self.mass, self.age, self.ZH, recipe=self.MLrecipe)
+        self.ML = compute_ML(self.mass, self.age, self.MH, recipe=self.MLrecipe)
         self.flux = self.mass * self.ML
+
+        # mask
+        self.mask = (self.mass == 0)
+
         # Get the copy for the original pos, vel
         self.reset_rotations()
 

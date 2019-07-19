@@ -11,6 +11,9 @@ from numpy import float32 as floatsF
 
 from scipy.interpolate  import griddata as gdata
 
+import astropy
+from astropy.table import Table
+
 # update from Adriano on the list of names
 
 #####################################################
@@ -36,10 +39,9 @@ def read_ascii_files(filename):
         Masses
     age: array [N]
         Ages 
-    zh: array [N]
-        Z/H
+    mh: array [N]
+        M/H
     """
-
     # Reading the input file
     if os.path.isfile(filename):
         try:
@@ -47,15 +49,15 @@ def read_ascii_files(filename):
             if data.shape[0] == 7:
                 print("Found 7 columns, will not read age and Z/H")
                 x, y, z, vx, vy, vz, mass = data
-                age = np.zeros_like(mass)
+                logage = np.zeros_like(mass)
                 ZH = np.zeros_like(mass)
             elif data.shape[0] == 8:
                 print("Found 8 columns, will not read Z/H")
-                x, y, z, vx, vy, vz, mass, age = data
+                x, y, z, vx, vy, vz, mass, logage = data
                 ZH = np.zeros_like(mass)
             elif data.shape[0] == 9:
                 print("Found 9 columns, will read all including age and Z/H")
-                x, y, z, vx, vy, vz, mass, age, ZH = data
+                x, y, z, vx, vy, vz, mass, logage, ZH = data
             else:
                 print("ERROR: the input file should at least "
                       "contain 7 columns or no more than 9")
@@ -63,7 +65,12 @@ def read_ascii_files(filename):
 
             pos = np.vstack((x, y, z)).T
             vel = np.vstack((vx, vy, vz)).T
-            return pos, vel, mass, age, ZH
+
+            # Going into linear age and MH
+            age = 10**(logage)
+            MH = np.log10(ZH) - np.log10(0.19)
+
+            return pos, vel, mass, age, MH
 
         except ValueError:
             print("ERROR: could not read content of the input file")
@@ -116,7 +123,7 @@ def SSPPhot(afile):
 
 # Function to return the value of M/L following a recipe
 # depending on the given age and metallicity
-def compute_ML(mass, age=None, ZH=None, recipe="Adriano"):
+def compute_ML(mass, age=None, ZH=None, recipe="SSPs"):
     """Return the M/L ration given a set of input
     age and metallicity
 
@@ -139,7 +146,7 @@ def compute_ML(mass, age=None, ZH=None, recipe="Adriano"):
     else:
         return np.ones_like(mass)
 
-def compute_ML_SSPs(mass, age=None, ZH=None, 
+def compute_ML_SSPs(mass, age=None, MH=None, 
                     recipe='EMILES', IMF='KB', 
                     slope=1.30, iso='BaSTI', band='V'):
     """Return the M/L ratio given a set of input
@@ -149,7 +156,7 @@ def compute_ML_SSPs(mass, age=None, ZH=None,
         The stellar mass data, of shape (N,)
     age: array [dtype=float]
         The stellar age data, of shape (N,)
-    ZH: array [dtype=float]
+    MH: array [dtype=float]
         The stellar metallicity data, of shape (N,)
     recipe: str
         The recipe by which to compute the stellar mass-to-light
@@ -175,9 +182,9 @@ def compute_ML_SSPs(mass, age=None, ZH=None,
         The stellar mass-to-light ratio in `band`, of shape (N,)
     """
     # check that the age and metallicity have been specified
-    if 'EMILES' in recipe and age is not None and ZH is not None:
+    if 'EMILES' in recipe and age is not None and MH is not None:
         # choice of iso
-        dic_ico = {'padova': 'PADOVA00', 'basti': 'BASTI'}
+        dic_iso = {'padova': 'PADOVA00', 'basti': 'BASTI'}
         try: 
             iso = dic_iso[iso.lower()]
         except:
@@ -216,12 +223,9 @@ def compute_ML_SSPs(mass, age=None, ZH=None,
         
         sspML = mMass / lFlux
         
-        # fudge the abundances until they can be implemented 
-        # correctly based on what the simulations actually measure
-        MH = np.log10(ZH) - np.log10(0.19) 
         # interpolate the SSP predictions, and extract the M/L 
-        # for the given (`age`, `ZH`) pairs
-        ML = gdata((mAges, mMetals), sspML, (age,MH), method='cubic') 
+        # for the given (`age`, `MH`) pairs
+        ML = gdata((mAges, mMetals), sspML, (age, MH), method='cubic') 
         
         return ML
         
