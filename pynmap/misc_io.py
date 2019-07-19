@@ -11,6 +11,8 @@ from numpy import float32 as floatsF
 
 from scipy.interpolate  import griddata as gdata
 
+# update from Adriano on the list of names
+
 #####################################################
 #------ Reading Magneticum files --------#
 def read_ascii_files(filename):
