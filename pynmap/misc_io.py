@@ -105,8 +105,8 @@ def SSPPhot(afile):
     """
     names = ['IMF', 'slope', 'MH', 'age', 
              'U', 'B', 'V', 'R', 'I', 'J', 'H', 'K', 
-             'UV', 'BV', 'VR', 'VI', 'VH', 'VK', 'mlU', 
-             'mlB', 'mlV', 'mlR', 'mlI', 'mlJ', 'mlH', 
+             'UV', 'BV', 'VR', 'VI', 'VJ', 'VH', 'VK',
+             'mlU', 'mlB', 'mlV', 'mlR', 'mlI', 'mlJ', 'mlH', 
              'mlK', 'F439W', 'F555W', 'F675W', 'F814W', 
              'F439WF555W', 'F555WF675W', 'F555WF814W']
     bData = Table.read(afile, names=names, format='ascii')
