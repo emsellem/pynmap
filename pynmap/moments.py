@@ -196,13 +196,14 @@ def project_data(x, y, data, weights=None, lim=[-1,1,-1,1], nXY=10):
         nXY = np.zeros(2, dtype=np.int) + nXY
     elif np.size(nXY) != 2 :
         print("ERROR: dimension of n should be 1 or 2")
-        return 0,0,0,0,0
+        return 0,0,0,0 # expect 4 values returned
 
     if weights is None : weights = np.ones_like(x)
     binX = np.linspace(lim[0], lim[1], nXY[0]+1)
     binY = np.linspace(lim[2], lim[3], nXY[1]+1)
     mat_weight = np.histogram2d(x, y, [binX, binY], weights=weights)[0]
-    mat_wdata = np.histogram2d(x, y, [binX, binY], weights=weights * data)[0]
+    hmask = np.isfinite(data)
+    mat_wdata = np.histogram2d(x[hmask], y[hmask], [binX, binY], weights=weights[hmask] * data[hmask])[0]
 
     mask = (mat_weight != 0)
     mat_data = np.zeros_like(mat_weight)
