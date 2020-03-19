@@ -1,23 +1,145 @@
-"""Module misc_io containing a set of useful I/O routines 
+# -*- coding: utf-8 -*-
+
+"""Module misc_io containing a set of useful I/O routines
 and classes. This includes reading the inputs files from
 the simulations.
 """
+
 import os
-from os.path import join as joinpath
 
 import numpy as np
-from numpy import float64 as floatF
 from numpy import float32 as floatsF
 
-from scipy.interpolate  import griddata as gdata
+def read_rdramses_part(filename):
+    """Reading RDRAMSES files from hydro or particles
+    File is formatted with first the 3 configuration spatial coordinates
+    Then the velocities, then mass, then possibly Age and Metallicity
 
-import astropy
-from astropy.table import Table
+    Parameters
+    ----------
+    filename: str
+        Name of the input ascii file. Should contain one particle per line with
+        x y z Vx Vy Vz mass age Z/H and possibly Fe/H or O/H
 
-# update from Adriano on the list of names
+    Returns
+    -------
+    pos: array [3,N]
+        Configuration cartesian positions [kpc] for N particles. 
+    vel: array [3,N]
+        Cartesian velocities [kpc] for N particles. 
+    mass: array [N]
+        Masses
+    age: array [N]
+        Ages (Myr)
+    mh: array [N]
+        M/H
+    feh: array [N]
+        Fe/H
+    oh: array [N]
+        O/H
+    """
+    # Reading the input file
+    if os.path.isfile(filename):
+        try:
+            data = np.loadtxt(filename).T
+            if data.shape[0] == 7:
+                print("Found 7 columns, will not read age and Z/H")
+                x, y, z, vx, vy, vz, mass = data
+                age = np.zeros_like(mass)
+                ZH = np.zeros_like(mass)
+                OH = np.zeros_like(mass)
+                FeH = np.zeros_like(mass)
+            elif data.shape[0] == 8:
+                print("Found 8 columns, will not read Z/H")
+                x, y, z, vx, vy, vz, mass, age = data
+                ZH = np.zeros_like(mass)
+                OH = np.zeros_like(mass)
+                FeH = np.zeros_like(mass)
+            elif data.shape[0] == 9:
+                print("Found 9 columns, will read all including age and Z/H")
+                x, y, z, vx, vy, vz, mass, age, ZH = data
+                OH = np.zeros_like(mass)
+                FeH = np.zeros_like(mass)
+            elif data.shape[0] == 11:
+                print("Found 11 columns, will read all including age and Z/H + Fe/H and O/H")
+                x, y, z, vx, vy, vz, mass, age, ZH, FeH, OH = data
+            else:
+                print("ERROR: the input file should at least "
+                      "contain 7 columns or no more than 9")
+                return None, None, None, None, None
 
-#####################################################
-#------ Reading Magneticum files --------#
+            pos = np.vstack((x, y, z)).T
+            vel = np.vstack((vx, vy, vz)).T
+
+            return pos, vel, mass, age, ZH, FeH, OH
+
+        except ValueError:
+            print("ERROR: could not read content of the input file")
+
+    else:
+        print("Input file not found: {0}".format(filename))
+        return None, None, None, None, None
+
+def read_rdramses_hydro(filename):
+    """Reading RDRAMSES files from hydro or particles
+    File is formatted with first the 3 configuration spatial coordinates
+    Then the velocities, then mass, then possibly Age and Metallicity
+
+    Parameters
+    ----------
+    filename: str
+        Name of the input ascii file. Should contain one particle per line with
+        x y z Vx Vy Vz mass age Z/H and possibly Fe/H or O/H
+
+    Returns
+    -------
+    pos: array [3,N]
+        Configuration cartesian positions [kpc] for N particles. 
+    vel: array [3,N]
+        Cartesian velocities [kpc] for N particles. 
+    rho: array [N]
+        density cm-3
+    mass: array [N]
+        Masses Msun
+    T: array [N]
+        Temperature in K
+    mh: array [N]
+        M/H
+    feh: array [N]
+        Fe/H
+    oh: array [N]
+        O/H
+    """
+    # Reading the input file
+    if os.path.isfile(filename):
+        try:
+            data = np.loadtxt(filename).T
+            if data.shape[0] == 10:
+                print("Found 10 columns, will not read age and Z/H")
+                x, y, z, vx, vy, vz, rho, level, mass, T = data
+                ZH = np.zeros_like(mass)
+                OH = np.zeros_like(mass)
+                FeH = np.zeros_like(mass)
+            elif data.shape[0] == 13:
+                print("Found 13 columns")
+                x, y, z, vx, vy, vz, rho, level, mass, T, ZH, FeH, OH = data
+            else:
+                print("ERROR: the input file should at least "
+                      "contain 10 columns or no more than 13")
+                return None
+
+            pos = np.vstack((x, y, z)).T
+            vel = np.vstack((vx, vy, vz)).T
+
+            return pos, vel, mass, rho, T, ZH, FeH, OH
+
+        except ValueError:
+            print("ERROR: could not read content of the input file")
+
+    else:
+        print("Input file not found: {0}".format(filename))
+        return None
+
 def read_ascii_files(filename):
     """Reading ascii formatted files
     File is formatted with first the 3 configuration spatial coordinates
@@ -37,255 +159,200 @@ def read_ascii_files(filename):
         Cartesian velocities [kpc] for N particles. 
     mass: array [N]
         Masses
-    age: array [N]
-        Ages 
-    mh: array [N]
-        M/H
     """
     # Reading the input file
     if os.path.isfile(filename):
         try:
             data = np.loadtxt(filename).T
-            if data.shape[0] == 7:
-                print("Found 7 columns, will not read age and Z/H")
-                x, y, z, vx, vy, vz, mass = data
-                logage = np.zeros_like(mass)
-                ZH = np.zeros_like(mass)
-            elif data.shape[0] == 8:
-                print("Found 8 columns, will not read Z/H")
-                x, y, z, vx, vy, vz, mass, logage = data
-                ZH = np.zeros_like(mass)
-            elif data.shape[0] == 9:
-                print("Found 9 columns, will read all including age and Z/H")
-                x, y, z, vx, vy, vz, mass, logage, ZH = data
-            else:
-                print("ERROR: the input file should at least "
-                      "contain 7 columns or no more than 9")
-                return None, None, None, None, None
+            print("Found {} columns in file".format(data.shape[0]))
+            x, y, z, vx, vy, vz = data[:6]
+            rdata = data[6:]
 
             pos = np.vstack((x, y, z)).T
             vel = np.vstack((vx, vy, vz)).T
 
-            # Going into linear age and MH
-            age = 10**(logage)
-            MH = np.log10(ZH) - np.log10(0.19)
-
-            return pos, vel, mass, age, MH
+            return pos, vel, rdata
 
         except ValueError:
             print("ERROR: could not read content of the input file")
 
     else:
         print("Input file not found: {0}".format(filename))
-        return None, None, None, None, None
 
-def SSPMass(afile):
-    """
-    Reads in the mass predictions from SSP models
+    return None, None, None
 
-    Parameters
-    ----------
-    afile: str 
-        The path to the mass predictions
+def spread_amr(list_coord, level, list_val=[], list_const=[], nsample=10,
+               box=10, stretch=[]) :
+    """Function to reproduce a set of x, y, z and data
+    n times to spread within a pixel
 
-    Returns
-    -------
-    bData: dict 
-        A dictionary of all columns of the mass predictions
-    """
-    names = ['IMF', 'slope', 'MH', 'age', 'mTot', 'mSRem', 
-            'mS', 'mRem', 'mGas', 'mlSRemV', 'mlSV', 'mV', 'unk']
-    bData = Table.read(afile, names=names, format='ascii')
-    return bData
+    Args:
+        list_coord:
+        list_val:
+        list_const:
+        level:
+        nsample:
+        box:
 
-def SSPPhot(afile):
-    """
-    Reads in the photometric predictions from SSP models
-
-    Parameters
-    ----------
-    afile: str 
-        The path to the photometric predictions
-
-    Returns
-    -------
-    bData: dict 
-        A dictionary of all columns of the photometric predictions
-    """
-    names = ['IMF', 'slope', 'MH', 'age', 
-             'U', 'B', 'V', 'R', 'I', 'J', 'H', 'K', 
-             'UV', 'BV', 'VR', 'VI', 'VJ', 'VH', 'VK',
-             'mlU', 'mlB', 'mlV', 'mlR', 'mlI', 'mlJ', 'mlH', 
-             'mlK', 'F439W', 'F555W', 'F675W', 'F814W', 
-             'F439WF555W', 'F555WF675W', 'F555WF814W']
-    bData = Table.read(afile, names=names, format='ascii')
-    return bData
-
-# Function to return the value of M/L following a recipe
-# depending on the given age and metallicity
-def compute_ML(mass, age=None, ZH=None, recipe="SSPs"):
-    """Return the M/L ration given a set of input
-    age and metallicity
-
-    Parameters
-    ----------
-    mass: array
-         Input mass array in Msun
-    age: array
-         Input age array in Gyr (same size as mass)
-    ZH: array
-         Input metallicity array (same size as mass)
-
-    Returns
-    -------
-    ML: array
-        M/L array - same shape as input mass
-    """
-    if recipe == "SSPs":
-        return compute_ML_SSPs(mass, age, ZH)
-    else:
-        return np.ones_like(mass)
-
-def compute_ML_SSPs(mass, age=None, MH=None, 
-                    recipe='EMILES', IMF='KB', 
-                    slope=1.30, iso='BaSTI', band='V'):
-    """Return the M/L ratio given a set of input
-    Parameters
-    ----------
-    mass: array [dtype=float]
-        The stellar mass data, of shape (N,)
-    age: array [dtype=float]
-        The stellar age data, of shape (N,)
-    MH: array [dtype=float]
-        The stellar metallicity data, of shape (N,)
-    recipe: str
-        The recipe by which to compute the stellar mass-to-light
-        ratio. Choose from `['EMILES']`
-    IMF: str
-        The assumed IMF. Choose from `['UN', 'BI', 'CH', 'KB']`,
-        corresponding to the canonical single power-law, double broken
-        power-law ("bimodal"), Chabrier, and revised Kroupa, respectively
-    slope: float
-        The slope of the high-mass end of the IMF
-    iso: str
-        The isochrone set to be used. Choose from `['BaSTI',
-        'pad']`, corresponding to the BaSTI (Pietrinferni et al., 2004)
-            and Padova (Girardi et al., 2000) isochrones, respectively
-    band: str
-        The photometric band in which to compute the stellar mass-
-        to-light ratio. Choose from `['U', 'B', 'V', 'R', 'I', 'J', 'H',
-        'K']` Johnson-Cousins filters
-
-    Returns
-    -------
-    ML: array [dtype=float]
-        The stellar mass-to-light ratio in `band`, of shape (N,)
-    """
-    # check that the age and metallicity have been specified
-    if 'EMILES' in recipe and age is not None and MH is not None:
-        # choice of iso
-        dic_iso = {'padova': 'PADOVA00', 'basti': 'BASTI'}
-        try: 
-            iso = dic_iso[iso.lower()]
-        except:
-            print("ERROR: iso not found in list ({0})".format(dic_iso.keys()))
-        
-        pynDir = os.path.split(os.path.realpath(__file__))[0] # get the pynmap directory
-        lfn = joinpath(pynDir, 'SSPLibraries', 
-                       "out_phot_{0}_{1}.txt".format(IMF, iso))
-        mfn = joinpath(pynDir, 'SSPLibraries', 
-                       "out_mass_{0}_{1}.txt".format(IMF, iso))
-        
-        vegaBands = ['U', 'B', 'V', 'R', 'I', 'J', 'H', 'K']
-        assert band in vegaBands, ("Photometric band '{}' "
-                                  "is not in the EMILES "
-                                  "SSP predictions".format(band))
-        vegaSunMag = [5.600, 5.441, 4.820, 4.459, 
-                      4.148, 3.711, 3.392, 3.334]
-        # Solar magnitude in various bands
-        k = vegaBands.index(band)
-        sunMag = vegaSunMag[k]
-        
-        mData = SSPMass(mfn)
-        # create a mask, but allow for a tolerance in the keyword `slope` value
-        mw = np.isclose(slope, mData['slope'], atol=1e-2) 
-        mAges = mData['age'][mw]
-        mMetals = mData['MH'][mw]
-        # get the mass in stars + remnants
-        mMass = mData['mSRem'][mw] 
-        
-        lData = SSPPhot(lfn)
-        # create a mask, but allow for a tolerance in the keyword `slope` value
-        lw = np.isclose(slope, lData['slope'], atol=1e-2) 
-        lAges = lData['age'][lw]
-        lMetals = lData['MH'][lw]
-        lFlux = 10**(-0.4*(lData[band][lw] - sunMag))
-        
-        sspML = mMass / lFlux
-        
-        # interpolate the SSP predictions, and extract the M/L 
-        # for the given (`age`, `MH`) pairs
-        ML = gdata((mAges, mMetals), sspML, (age, MH), method='cubic') 
-        
-        return ML
-        
-    else:
-        return np.ones_like(mass)
-
-######### MAP class #################################
-class snapmap(object):
-    """Snapshot map class which contains just a name
-    and some data array. Has functionalities to save
-    as graphics, ascii or pickle
+    Returns:
+        list of coord, valt, val
 
     """
-    def __init__(self, name="dummy", data=np.zeros((2,2))):
-        """Initialise snapmap class
-        Parameters
-        ----------
-        name: str
-            Name of the input map
-        data: array
-            Data array
-        """
-        self.name = name
-        self.data = data
+    scales = box / 2.0**level
+    scalesr = np.repeat(scales, nsample)
+    sizex = len(list_coord[0])
+    if stretch == []:
+        stretch = [1.] * len(list_coord)
 
-    def write_ascii(self, filename):
-        """Saving the map into an ascii file
-        """
-        np.savetxt(filename, self.data)
+    # Offseting the coordinates
+    list_cr = []
+    for cx, s in zip(list_coord, stretch):
+        rx = (np.random.random_sample((nsample, sizex)).ravel() - 0.5) \
+             * s * scalesr
+        list_cr.append(np.repeat(cx, nsample) + rx)
 
-    def read_ascii(self, filename):
-        """Reading map from ascii
-        """
-        self.data = np.loadtxt(filename)
+    # Repeating the values themselves and spread
+    list_valr = []
+    for val in list_val:
+        list_valr.append(np.repeat(val / nsample, nsample))
 
-    def write_pickle(self, filename):
-        """Saving the map via pickle
-        """
-        f = open(filename, 'wb')
-        pickle.dump(self.data, f)
-        f.close()
+    # Repeating the values themselves
+    list_constr = []
+    for const in list_const:
+        list_constr.append(np.repeat(const, nsample))
 
-    def read_pickle(self, filename):
-        """Saving the map via pickle
-        """
-        f = open(filename, 'rb')
-        self.data = pickle.load(f)
-        f.close()
+    return list_cr, list_valr, list_constr
 
-    def write_pic(self, filename):
-        """Write a png or jpg
-        """
-        import matplotlib
-        from matplotlib import pyplot as plt
-        fig = plt.figure(1, figsize=(8,7))
-        plt.imshow(self.data)
-        plt.savefig(filename)
+def gas_to_cube(x, y, z, mass, level, rangein=None, debug=-1, data=None, box=100.):
 
-#####################################################
-#----------------------- General functions ---------#
+    opdata = (data != None)
+
+    # Levels and list of these
+    list_levels = np.unique(level)
+    Nlevels = len(list_levels)
+    max_level = max(list_levels)
+
+    # Scales
+    scales = box / 2.0**level
+    scale_min = min(scales)
+    scale_max = max(scales)
+    print("Levels are: ", list_levels)
+
+    indminx = np.argmin(x - scales / 2.)
+    indminy = np.argmin(y - scales / 2.)
+    indminz = np.argmin(z - scales / 2.)
+    indmaxx = np.argmax(x + scales / 2.)
+    indmaxy = np.argmax(y + scales / 2.)
+    indmaxz = np.argmax(z + scales / 2.)
+    # Scales in kpc
+    scale_minx = scales[indminx]
+    scale_miny = scales[indminy]
+    scale_minz = scales[indminz]
+    scale_maxx = scales[indmaxx]
+    scale_maxy = scales[indmaxy]
+    scale_maxz = scales[indmaxz]
+
+    # Minimum start for the grid
+    sc = scale_max
+    if rangein == None :
+       rangein = [x[indminx] - scale_minx / 2., x[indmaxx] + scale_maxx /2.,
+                  y[indminy] - scale_miny / 2., y[indmaxy] + scale_maxy /2.,
+                  z[indminz] - scale_minz / 2., z[indmaxz] + scale_maxz /2.]
+
+    # Get an integer number of pixels with the largest scale
+    minmaxXYZ = ((np.asarray(rangein) + np.array([0., sc, 0., sc, 0., sc])) // scale_max) * scale_max
+
+    # Add the 1/2 pixel size to get the real boundaries
+    minx, maxx = minmaxXYZ[0], minmaxXYZ[1]
+    miny, maxy = minmaxXYZ[2], minmaxXYZ[3]
+    minz, maxz = minmaxXYZ[4], minmaxXYZ[5]
+    # We have no central pixel
+    # sc2 = sc / 2.
+    # newrange = minmaxXYZ + np.array([sc2, -sc2, sc2, -sc2, sc2, -sc2])
+    # Lengths of the largest x,y,z
+    Dx = maxx - minx
+    Dy = maxy - miny
+    Dz = maxz - minz
+    # Get the real number of pixels as divided by the minimum scale
+    Nx = np.int(Dx / scale_min + 0.5)
+    Ny = np.int(Dy / scale_min + 0.5)
+    Nz = np.int(Dz / scale_min + 0.5)
+
+    # Get the newrange
+    newrange = [minx + scale_min / 2., maxx - scale_min / 2., miny + scale_min / 2., maxy - scale_min / 2., minz + scale_min / 2., maxz - scale_min / 2.]
+    # Select the right particles
+    sel = (x >= minx) & (x < maxx) & (y >= miny) & (y < maxy) & (z >= minz) & (z < maxz)
+
+    print("Range will be (X,Y,Z) : ", newrange)
+    print("Number of Pixels: ", Nx, Ny, Nz)
+
+    cube_Mass = np.zeros((Nx,Ny,Nz,Nlevels), dtype=np.float32)
+    if opdata:
+        cube_Data = np.zeros((Nx,Ny,Nz,Nlevels), dtype=np.float32)
+#    lim = [Nx * scale_min / 2., Ny * scale_min / 2., Nz * scale_min / 2.]
+#    X, Y, Z = numpy.mgrid[rangein[0]:rangein[1]:1j*Nx, rangein[2]:rangein[3]:1j*Ny, rangein[4]:rangein[5]:1j*Nz]
+
+    for i, l, in enumerate(list_levels) :
+        selectL = (level == l) * (sel)
+        scale = box / 2.0**l
+        xs = x[selectL]
+        ys = y[selectL]
+        zs = z[selectL]
+        ms = mass[selectL]
+        if opdata :
+            datas = data[selectL]
+        mx, Mx = min(xs) - scale / 2., max(xs) + scale / 2.
+        my, My = min(ys) - scale / 2., max(ys) + scale / 2.
+        mz, Mz = min(zs) - scale / 2., max(zs) + scale / 2.
+        Dx = Mx - mx
+        Dy = My - my
+        Dz = Mz - mz
+        Nx = np.int(Dx / scale + 0.5)
+        Ny = np.int(Dy / scale + 0.5)
+        Nz = np.int(Dz / scale + 0.5)
+        binX = np.linspace(mx, Mx, Nx+1)
+        binY = np.linspace(my, My, Ny+1)
+        binZ = np.linspace(mz, Mz, Nz+1)
+        nx = np.size(xs)
+        cube = np.zeros((nx,3), dtype=np.float32)
+        cube[:,0] = xs
+        cube[:,1] = ys
+        cube[:,2] = zs
+        hist3 = np.histogramdd(cube, bins=[binX,binY,binZ], weights=ms)
+        if opdata :
+            hist3D = np.histogramdd(cube, bins=[binX,binY,binZ], weights=datas)
+        if l < max_level :
+            # histzoom = scipy.ndimage.interpolation.zoom(hist3[0], 2**(max_level - l),
+            #                                mode='constant', prefilter=True, order=0)
+            histzoom = resample(hist3[0], 2**(max_level - l))
+            if opdata :
+                histzoomD = resample(hist3D[0], 2**(max_level - l))
+        else :
+            histzoom = hist3[0]
+            if opdata :
+                histzoomD = hist3D[0]
+        if debug == l : return hist3[0], histzoom
+        # Deriving the offset and applying it
+        ox = mx - minx
+        oy = my - miny
+        oz = mz - minz
+        ix = np.int(ox / scale_min + 0.5)
+        iy = np.int(oy / scale_min + 0.5)
+        iz = np.int(oz / scale_min + 0.5)
+        sh = histzoom.shape
+        cube_Mass[ix:ix+sh[0],iy:iy+sh[1],iz:iz+sh[2],i] = histzoom / 8**(max_level - l)
+        if opdata :
+            cube_Data[ix:ix+sh[0],iy:iy+sh[1],iz:iz+sh[2],i] = histzoomD
+
+    X, Y, Z = numpy.mgrid[newrange[0]:newrange[1]:1j*Nx, newrange[2]:newrange[3]:1j*Ny, newrange[4]:newrange[5]:1j*Nz]
+    if opdata :
+        return X, Y, Z, cube_Mass, cube_Data, list_levels
+    else :
+        return X, Y, Z, cube_Mass, 0., list_levels
+
+
+
+# General Functions
 def return_dummy(n=1, default=0):
     return [default] * n
 
@@ -299,5 +366,4 @@ def convert_to_list(a):
             print("ERROR: The number provided is not a proper number")
             return None
     return a
-    
 

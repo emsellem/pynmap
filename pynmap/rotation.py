@@ -11,10 +11,7 @@ __contact__   = " <eric.emsellem@eso.org>"
 # Importing modules
 import numpy as np
 
-############################################################
-### rotation of positions and velocities according to 3 Euler angles
-############################################################
-def rotmatXYZ(pos, vel=None, alpha=0.0, beta=0.0, gamma=0.0, 
+def rotateXYZ_mat(pos, vel=None, alpha=0.0, beta=0.0, gamma=0.0,
               rotorder=[0,1,2], direct=True):   # Angles in degrees
     """
     Performs a rotation around the three axes in order given by rotorder
@@ -73,10 +70,7 @@ def rotmatXYZ(pos, vel=None, alpha=0.0, beta=0.0, gamma=0.0,
 
     return pos, vel
 
-############################################################
-### rotation of positions and velocities according to PA, i
-############################################################
-def rotmat(pos, vel=None, PA=0.0, inclination=0.0, direct=True): 
+def rotate_mat(pos, vel=None, PA=0.0, inclination=0.0, direct=True):
     """
     Performs a rotation of PA and i with angles given in degrees
     for the position and velocities of particles.
@@ -124,7 +118,6 @@ def rotmat(pos, vel=None, PA=0.0, inclination=0.0, direct=True):
 
     return pos, vel
 
-## =======================================================
 def xy_to_polar(x, y, cx=0.0, cy=0.0, PA=None) :
     """
     Convert x and y coordinates into polar coordinates
@@ -139,28 +132,28 @@ def xy_to_polar(x, y, cx=0.0, cy=0.0, PA=None) :
     Return : R, theta (in radians)
     """
     if PA is None : PA = -np.pi / 2.
-    ## If the PA does not have X along the abscissa, rotate
+    # If the PA does not have X along the abscissa, rotate
     if np.mod(PA + np.pi / 2., np.pi) != 0.0 : 
         x, y = rotxyC(x, y, cx=cx, cy=cy, angle=PA + np.pi / 2.)
     else : x, y = x - cx, y - cy
 
-    ## Polar coordinates
-    r = np.sqrt(x**2 + y**2)
-    ## Now computing the true theta
+    # Polar coordinates
+    R = np.sqrt(x**2 + y**2)
+    # Now computing the true theta
     theta = np.arctan2(y, x)
-    return r, theta
-#--------------------------------------------------------------
+    return R, theta
+
 def polar_to_xy(r, theta) :
     """
     Convert x and y coordinates into polar coordinates Theta in Radians
     Return :x, y
     """
 
-    ## cartesian
+    # cartesian
     x = r * np.cos(theta)
     y = r * np.sin(theta)
     return x, y
-#---------------------------------------------------------------
+
 def rotxC(x, y, cx=0.0, cy=0.0, angle=0.0) :
     """ Rotate by an angle (in radians) 
         the x axis with a center cx, cy
@@ -168,7 +161,7 @@ def rotxC(x, y, cx=0.0, cy=0.0, angle=0.0) :
         Return rotated(x)
     """
     return (x - cx) * np.cos(angle) + (y - cy) * np.sin(angle)
-#---------------------------------------------------------------
+
 def rotyC(x, y, cx=0.0, cy=0.0, angle=0.0) :
     """ Rotate by an angle (in radians) 
         the y axis with a center cx, cy
@@ -176,30 +169,30 @@ def rotyC(x, y, cx=0.0, cy=0.0, angle=0.0) :
         Return rotated(y)
     """
     return (cx - x) * np.sin(angle) + (y - cy) * np.cos(angle)
-#---------------------------------------------------------------
+
 def rotxyC(x, y, cx=0.0, cy=0.0, angle=0.0) :
     """ Rotate both x, y by an angle (in radians) 
         the x axis with a center cx, cy
 
         Return rotated(x), rotated(y)
     """
-    ## First centring
+    # First centring
     xt = x - cx
     yt = y - cy
-    ## Then only rotation
+    # Then only rotation
     return rotxC(xt, yt, angle=angle), rotyC(xt, yt, angle=angle)
-#---------------------------------------------------------------
-def azimuthalAverage(image, center=None, scale=1.0):
+
+def az_average(data, center=None, scale=1.0):
     """
     Calculate the azimuthally averaged radial profile.
-    image - The 2D image
+    data - The 2D data
     center - The [x,y] pixel coordinates used as the center. The default is 
              None, which then uses the center of the image (including 
-             fracitonal pixels).
+             fractional pixels).
     
     """
     # Calculate the indices from the image
-    y, x = np.indices(image.shape)
+    y, x = np.indices(data.shape)
 
     if center is None:
         center = np.array([(x.max()-x.min())/2.0, 
@@ -212,7 +205,7 @@ def azimuthalAverage(image, center=None, scale=1.0):
     # Get sorted radii
     ind = np.argsort(r.flat)
     r_sorted = r.flat[ind]
-    i_sorted = np.nan_to_num(image.flat[ind])
+    i_sorted = np.nan_to_num(data.flat[ind])
 
     # Get the integer part of the radii (bin size = 1)
     r_int = r_sorted.astype(int)
@@ -234,3 +227,21 @@ def azimuthalAverage(image, center=None, scale=1.0):
     radii = np.arange(np.max(r_int)) * scale
 
     return radii, radial_prof
+
+def vector_xy_to_rtheta(x, y, Vx, Vy):
+    """
+    Convert Vxy into VR, Vtheta
+
+    Parameters
+    ----------
+    x, y:
+    Vx, Vy:
+
+    Return : R, theta, VR, Vtheta
+    """
+    R, theta = xy_to_polar(x, y)
+    # Polar coordinates
+    VR = Vx * np.cos(theta) + Vy * np.sin(theta)
+    Vtheta = -Vx * np.sin(theta) + Vy * np.cos(theta)
+    return R, theta, VR, Vtheta
+

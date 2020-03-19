@@ -58,4 +58,4 @@ except ImportError:
     print('There is a problem with importing astropy at initialisation')
 
 # Import the different subfiles
-from pynmap import (pynmap, moments, rotation, misc_io)
+from pynmap import (pynmap, grid, misc_io, fit_losvd)
