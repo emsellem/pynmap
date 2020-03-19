@@ -193,7 +193,7 @@ class snapshot(object):
         self._vel_orig = copy.copy(self.vel)
         # Compute the luminosity
         self.ML = compute_ML(self.mass, self.age, self.MH, recipe=self.MLrecipe)
-        self.flux = self.mass / self.ML
+        self.flux = self.mass * self.ML
 
         # mask
         self.mask = (self.mass == 0)

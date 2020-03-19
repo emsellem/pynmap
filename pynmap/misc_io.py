@@ -10,7 +10,6 @@ from numpy import float64 as floatF
 from numpy import float32 as floatsF
 
 from scipy.interpolate  import griddata as gdata
-from scipy.interpolate  import interp1d
 
 import astropy
 from astropy.table import Table
@@ -50,15 +49,15 @@ def read_ascii_files(filename):
             if data.shape[0] == 7:
                 print("Found 7 columns, will not read age and Z/H")
                 x, y, z, vx, vy, vz, mass = data
-                age = np.zeros_like(mass)
+                logage = np.zeros_like(mass)
                 ZH = np.zeros_like(mass)
             elif data.shape[0] == 8:
                 print("Found 8 columns, will not read Z/H")
-                x, y, z, vx, vy, vz, mass, age = data
+                x, y, z, vx, vy, vz, mass, logage = data
                 ZH = np.zeros_like(mass)
             elif data.shape[0] == 9:
                 print("Found 9 columns, will read all including age and Z/H")
-                x, y, z, vx, vy, vz, mass, age, ZH = data
+                x, y, z, vx, vy, vz, mass, logage, ZH = data
             else:
                 print("ERROR: the input file should at least "
                       "contain 7 columns or no more than 9")
@@ -68,8 +67,8 @@ def read_ascii_files(filename):
             vel = np.vstack((vx, vy, vz)).T
 
             # Going into linear age and MH
-            # age = 10**(logage)
-            MH = np.log10(ZH)
+            age = 10**(logage)
+            MH = np.log10(ZH) - np.log10(0.19)
 
             return pos, vel, mass, age, MH
 
@@ -226,24 +225,8 @@ def compute_ML_SSPs(mass, age=None, MH=None,
         
         # interpolate the SSP predictions, and extract the M/L 
         # for the given (`age`, `MH`) pairs
+        ML = gdata((mAges, mMetals), sspML, (age, MH), method='cubic') 
         
-        # since the simulations can produce higher [Z/H] then the isochrones
-        # can model, we need to extrapolate (resticted to 1D) the current
-        # [Z/H] predictions of the SSP library
-        extraM = np.arange(0.6, 1.4, 0.2)
-        exML = []
-        for ai, age in enumerate(np.unique(mAges)):
-            aw = np.where( mAges==age )[0]
-            MF = interp1d( mMetals[aw], sspML[aw], fill_value='extrapolate' )
-            exML += [MF(extraM)]
-        for i in range(extraM.size):
-            mAges = np.append( mAges, np.unique(mAges) )
-            mMetals = np.append( mMetals, np.ones(np.unique(mAges).size)*extraM[i] )
-        newML = np.empty( mAges.size )
-        newML[:lAges.size] = sspML
-        newML[lAges.size:] = np.array(exML).T.ravel()
-        ML = gdata((mAges, mMetals), newML, (age, MH), method='cubic')
-
         return ML
         
     else:
