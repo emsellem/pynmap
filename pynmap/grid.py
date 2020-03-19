@@ -111,6 +111,8 @@ def points_2vmaps(x, y, v, weights=None, limXY=[-1,1,-1,1], nXY=10, mask=None):
     if mask is None:
         mask = np.zeros_like(weights, dtype=bool)
 
+    nogood = ~np.isfinite(v)
+    mask = mask & nogood
     xm = x[~mask]
     ym = y[~mask]
     vm = v[~mask]
@@ -182,6 +184,8 @@ def points_2map(x, y, data=None, weights=None, limXY=[-1,1,-1,1],
     if weights is None : weights = np.ones_like(x)
     if data is None : data = np.ones_like(x)
 
+    nogood = ~np.isfinite(data)
+    mask = mask & nogood
     xm = x[~mask]
     ym = y[~mask]
     wm = weights[~mask]
