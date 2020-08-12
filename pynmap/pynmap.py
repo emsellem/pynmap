@@ -55,6 +55,14 @@ class SnapMap(object) :
         print("Name {0}: {1}".format(self.name, self._info))
         print("List of keys: {}".format(self.input_keys))
 
+    @property
+    def extent(self):
+        if hasattr(self, 'X') & hasattr(self, 'Y'):
+            return [np.min(self.X), np.max(self.X), 
+                    np.min(self.Y), np.max(self.Y)]
+        else:
+            return None
+
 class SnapMapList(list) :
     """Set of spectra
     """
@@ -195,7 +203,7 @@ class snapshot(object):
                 setattr(self, lab, data[i])
 
         if not hasattr(self, 'mass'):
-            self.mass = np.ones_like(self.pos[0])
+            self.mass = np.ones_like(self.pos[:,0])
 
         if not hasattr(self, 'age'):
             if hasattr(self, 'logage'):
@@ -206,7 +214,7 @@ class snapshot(object):
 
         if not hasattr(self, 'MH'):
             if hasattr(self, 'ZH'):
-                self.MH = np.log10(ZH) - np.log10(0.19)
+                self.MH = np.log10(self.ZH) - np.log10(0.19)
             else:
                 self.MH = np.zeros_like(self.mass)
 

@@ -7,9 +7,10 @@ import numpy as np
 import os
 from os.path import join as joinpath
 
+
 # Specific modules
 from astropy.table import Table
-from scipy.interpolate  import griddata as gdata
+from scipy.interpolate  import griddata as gdata, interp1d 
 
 def gausshermite(vbin=None, gh=None, default_nv=101) :
     """ Returns the Gauss-Hermite function given a set of parameters
@@ -77,12 +78,16 @@ def moment012(x, data) :
     :returns m0, m1, m2 : the maximum amplitude and first two moments
 
     """
-    m0 = np.max(data)
-    m1 = np.average(x, weights=data)
-    m2 = np.sqrt(np.average(x**2, weights=data) - m1**2)
+    if np.all(data == 0):
+        m0 = 0.
+        m1 = 0.
+        m2 = np.min(np.diff(x)) / 3.0
+    else:
+        m0 = np.sum(data)
+        m1 = np.average(x, weights=data)
+        m2 = np.sqrt(np.average(x**2, weights=data) - m1**2)
 
     return m0, m1, m2
-
 
 def compute_ml(mass, age=None, ZH=None, method="SSPs"):
     """Return the M/L ration given a set of input
@@ -242,3 +247,168 @@ def SSPPhot(afile):
              'F439WF555W', 'F555WF675W', 'F555WF814W']
     bData = Table.read(afile, names=names, format='ascii')
     return bData
+
+def find_centerodd(X, Y, Z, Radius=3.0) :
+    """ Find central value for an odd sided field
+        X : x coordinates
+        Y : y coordinates
+        Z : values
+        Radius: radius within which to derive the central value
+        Return the central value, and some amplitude value
+    """
+    # First select the points which are non-zero and compress
+    ravZ = np.ravel(Z)
+    sel = (ravZ != 0.)
+    selz = np.compress(sel,ravZ)
+
+    ## Select the central points for the central value
+    selxy = np.ravel((np.abs(X) < Radius) & (np.abs(Y) < Radius)) & sel
+    selzxy = np.compress(selxy, ravZ)
+    cval = np.median(selzxy)
+
+    sig = np.std(selz)
+    sselz = np.compress(np.abs(selz - cval) < 3 * sig, selz - cval)
+    ampl = np.max(np.abs(sselz)) / 1.1
+    return cval, cval - ampl, cval + ampl
+
+def find_centereven(X, Y, Z, Radius=3.0, sel0=True) :
+    """ Find the central value for an even sided field
+        X : x coordinates
+        Y : y coordinates
+        Z : data values
+        Radius: radius within which to derive the central value
+        Returns the min and max
+    """
+    ravZ = np.ravel(Z)
+    if sel0 : sel = (ravZ != 0.)
+    else : sel = (np.abs(ravZ) >= 0.)
+    sel = np.ravel((np.abs(X) < Radius) & (np.abs(Y) < Radius)) & sel
+    selz = np.compress(sel, ravZ)
+    maxz = np.max(selz)
+    minz = np.min(selz)
+
+    return minz, maxz
+
+def xy_cov_matrix2d(x, y, weights):
+    """Given a set of coordinates and weights
+    compute the covariance matrix for the coordinates
+    """
+    momI = weights.sum()
+    if momI == 0. :
+        return np.array([[1., 0.], [0., 1.]])
+
+    momIX = (weights * x).sum() / momI
+    momIY = (weights * y).sum() / momI
+    mu20 = (weights * x * x).sum() / momI - momIX**2
+    mu02 = (weights * y * y).sum() / momI - momIY**2
+    mu11 = (weights * x * y).sum() / momI - momIX * momIY
+    return np.array([[mu20, mu11], [mu11, mu02]])
+
+def characterise_ima2d(x, y, flux, nbins=30, fracflux=-5, facn=3):
+    """Characterise a 2d flux image
+    """
+
+    tflux = flux.sum()
+    rad = np.zeros(nbins*facn)
+    prof = np.zeros_like(rad)
+
+    eps = np.zeros(nbins)
+    pa = np.zeros_like(eps)
+    flux_prof = np.zeros_like(eps)
+
+    flux_samp = np.logspace(fracflux, np.log10(0.99), nbins*facn) * np.max(flux)
+    for i, g in enumerate(flux_samp):
+        xd, yd, fd, [radi, epsd, pad] = morph_ima2d(x, y, flux, ground=g)
+        prof[i] = fd.sum()
+        rad[i] = radi
+
+    # Select the ante penultieme value
+    ind_rad = len(rad[rad == np.max(rad)]) -1
+    if ind_rad < 0:
+        print("Problem selecting valid pixels")
+        return [0], [0], [0], [0], 0.
+
+    sel_rad = (rad[ind_rad:] > 0.)
+    inv_cumf = interp1d(prof[ind_rad:][sel_rad], rad[ind_rad:][sel_rad])
+    ground_func = interp1d(rad[ind_rad:][sel_rad], flux_samp[ind_rad:][sel_rad])
+    re_50 = inv_cumf(tflux / 2.)
+
+    # reinterpolating the profiles
+    rsample = np.linspace(np.min(rad[ind_rad:][sel_rad]), 
+                          np.max(rad[ind_rad:][sel_rad]), nbins)
+    for i, r in enumerate(rsample):
+        flux_prof[i] = ground_func(r)
+        xd, yd, fd, [radi, eps[i], pa[i]] = morph_ima2d(x, y, flux, ground=flux_prof[i])
+
+    inv_pa = interp1d(rsample, pa)
+    inv_eps = interp1d(rsample, eps)
+    eps_50 = inv_eps(re_50)
+    pa_50 = inv_pa(re_50)
+
+    return rsample, flux_prof, eps, pa, re_50, eps_50, pa_50
+
+def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
+    """Derive the morphology of an image after selecting
+    the given glux
+
+    Input
+    -----
+    x, y (arrays): coordinates
+    flux (array): flux array
+
+    Returns
+    -------
+    xs, ys, fs, [r, eps, pa]
+        which are:
+        selected Xs, Ys, Fs arrays 
+        and effective area radius, eps, pa
+    """
+    # selecting pixels which are above the threshold
+    selp = (flux > ground) & (flux < ceiling)
+    xs = x[selp]
+    ys = y[selp]
+    fs = flux[selp]
+
+    covmat = xy_cov_matrix2d(xs, ys, fs)
+    l1, l2, eps, pa = comp_pa_eps(covmat)
+    return xs, ys, fs, [np.sqrt(l1 * l2), eps, pa]
+     
+def comp_pa_eps(covmat):
+    """Return the PA and Eps for a given set of covariance 
+    parameters
+
+    Input
+    -----
+    covmat: covariance matrix
+
+    Returns
+    -------
+    major, minor axes, eps, pa
+    """
+    m20, m02, m11 = covmat[0,0], covmat[1,1], covmat[1,0]
+
+    if m20 == m02:
+        return m20, m02, 0., 90
+
+    if m11 == 0 :
+       if m20 == 0. :
+          return m02, m20, 0., 0.
+       if m02 > m20 :
+          return m02, m20, 1. - np.sqrt(m20 / m02), 0.
+       else :
+          if m02 == 0.:
+             return m20, m02, 0., 0.
+          else :
+             return m20, m02, 1. - np.sqrt(m02 / m20), 90.
+
+    delta = (m20 - m02)**2. + 4 * m11**2
+    lambda1 = ((m20 + m02) + np.sqrt(delta)) / 2.
+    lambda2 = ((m20 + m02) - np.sqrt(delta)) / 2.
+    lp = np.sqrt(lambda1)
+    lm = np.sqrt(np.maximum(lambda2,0.))
+    if lp == 0. :
+        eps = 1.
+    else:
+        eps = 1. - lm / lp
+    theta = np.rad2deg(0.5 * np.arctan(2.0 * m11 / (m20 - m02)))
+    return lp, lm, eps, theta

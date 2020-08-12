@@ -48,7 +48,10 @@ def _solve_amplitude(data, ufit, error=None):
 
     dn = data / error
     fn = ufit / error
-    Iamp = np.sum(dn * dn) / np.sum(dn * fn)
+    try:
+        Iamp = np.sum(dn * dn) / np.sum(dn * fn)
+    except RuntimeWarning:
+        Iamp = 1.
     return Iamp
 
 def fitgh(xax, data, deg_gh=2, err=None, params=None,

@@ -131,7 +131,7 @@ def read_rdramses_hydro(filename):
             pos = np.vstack((x, y, z)).T
             vel = np.vstack((vx, vy, vz)).T
 
-            return pos, vel, mass, rho, T, ZH, FeH, OH
+            return pos, vel, rho, level, mass, T, ZH, FeH, OH
 
         except ValueError:
             print("ERROR: could not read content of the input file")
@@ -367,3 +367,28 @@ def convert_to_list(a):
             return None
     return a
 
+def rebin_1darray(a, shape, function='sum'):
+    """Rebin an array into a new shape by making the sum or mean
+    """
+    sh = shape,a.shape[0]//shape
+    if function == 'mean':
+        return a.reshape(sh).mean(-1)
+    elif function == 'sum':
+        return a.reshape(sh).sum(-1)
+    else:
+        print("WARNING: doing the sum as input function {} "
+              " not recognised".format(function))
+        return a.reshape(sh).sum(-1)
+    
+def rebin_2darray(a, shape, function='sum'):
+    """Rebin an array into a new shape by making the sum or mean
+    """
+    sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
+    if function == 'mean':
+        return a.reshape(sh).mean(-1).mean(1)
+    elif function == 'sum':
+        return a.reshape(sh).sum(-1).sum(1)
+    else:
+        print("WARNING: doing the sum as input function {} "
+              " not recognised".format(function))
+        return a.reshape(sh).sum(-1).sum(1)

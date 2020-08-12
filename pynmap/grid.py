@@ -67,7 +67,7 @@ def point_2vprofiles(x, y, z, Vx, Vy, Vz, nbins=100, dz=np.array([-0.2, 0.2]),
 
     return Rbin, v, s
 
-def points_2vmaps(x, y, v, weights=None, limXY=[-1,1,-1,1], nXY=10, mask=None):
+def points_2vmaps(x, y, v, weights=None, limXY=[-1,1,-1,1], nXY=11, mask=None):
     """
     Calculate the first 2 velocity moments
 
@@ -118,15 +118,17 @@ def points_2vmaps(x, y, v, weights=None, limXY=[-1,1,-1,1], nXY=10, mask=None):
     vm = v[~mask]
     wm = weights[~mask]
 
-    binX = np.linspace(limXY[0], limXY[1], nXY[0]+1)
-    binY = np.linspace(limXY[2], limXY[3], nXY[1]+1)
+    stepx2 = (limXY[1] - limXY[0]) / (nXY[0] - 1) / 2.  
+    stepy2 = (limXY[3] - limXY[2]) / (nXY[1] - 1) / 2.  
+    binX = np.linspace(limXY[0]-stepx2, limXY[1]+stepx2, nXY[0]+1)
+    binY = np.linspace(limXY[2]-stepy2, limXY[3]+stepy2, nXY[1]+1)
     # moment 0
-    mat_weight = np.histogram2d(xm, ym, [binX, binY], weights=wm)[0]
+    mat_weight = np.histogram2d(xm, ym, [binX, binY], weights=wm)[0].T
     # moment 1
-    mat_wvel = np.histogram2d(xm, ym, [binX, binY], weights=wm * vm)[0]
+    mat_wvel = np.histogram2d(xm, ym, [binX, binY], weights=wm * vm)[0].T
     # moment 2
     mat_wvsquare = np.histogram2d(xm, ym, [binX, binY],
-                                  weights=wm * vm**2)[0]
+                                  weights=wm * vm**2)[0].T
 
     mask = (mat_weight != 0)
     mat_vel = np.zeros_like(mat_weight)
@@ -191,10 +193,12 @@ def points_2map(x, y, data=None, weights=None, limXY=[-1,1,-1,1],
     wm = weights[~mask]
     dm = data[~mask]
 
-    binX = np.linspace(limXY[0], limXY[1], nXY[0]+1)
-    binY = np.linspace(limXY[2], limXY[3], nXY[1]+1)
-    mat_weight = np.histogram2d(xm, ym, [binX, binY], weights=wm)[0]
-    mat_wdata = np.histogram2d(xm, ym, [binX, binY], weights=wm * dm)[0]
+    stepx2 = (limXY[1] - limXY[0]) / (nXY[0] - 1) / 2.  
+    stepy2 = (limXY[3] - limXY[2]) / (nXY[1] - 1) / 2.  
+    binX = np.linspace(limXY[0]-stepx2, limXY[1]+stepx2, nXY[0]+1)
+    binY = np.linspace(limXY[2]-stepy2, limXY[3]+stepy2, nXY[1]+1)
+    mat_weight = (np.histogram2d(xm, ym, [binX, binY], weights=wm)[0]).T
+    mat_wdata = (np.histogram2d(xm, ym, [binX, binY], weights=wm * dm)[0]).T
 
     mask = (mat_weight != 0)
     mat_data = np.zeros_like(mat_weight)
@@ -233,20 +237,21 @@ def points_2losvds(x, y, data, weights=None, limXY=[-1,1,-1,1], nXY=10,
         return 0,0,0,0,0
 
     # Defining the bins
-    binX = np.linspace(limXY[0], limXY[1], nXY[0]+1)
-    binY = np.linspace(limXY[2], limXY[3], nXY[1]+1)
-    binV = np.linspace(limV[0], limV[1], nV+1)
+    stepx2 = (limXY[1] - limXY[0]) / (nXY[0] - 1) / 2.  
+    stepy2 = (limXY[3] - limXY[2]) / (nXY[1] - 1) / 2.  
+    stepv2 = (limV[1] - limV[0]) / (nV - 1) / 2.  
+    binX = np.linspace(limXY[0]-stepx2, limXY[1]+stepx2, nXY[0]+1)
+    binY = np.linspace(limXY[2]-stepy2, limXY[3]+stepy2, nXY[1]+1)
+    binV = np.linspace(limV[0]-stepv2, limV[1]+stepv2, nV+1)
     # Defining the centres of each pixel
-    pixX = (binX[1:] + binX[0:-1]) / 2.
-    pixY = (binY[1:] + binY[0:-1]) / 2.
-    pixV = (binV[1:] + binV[0:-1]) / 2.
+    pixX = np.linspace(limXY[0], limXY[1], nXY[0])
+    pixY = np.linspace(limXY[2], limXY[3], nXY[1])
+    pixV = np.linspace(limV[0], limV[1], nV)
 
     if mask is None: mask = np.zeros_like(x, dtype=bool)
     sizeX = np.size(x[~mask])
     sample = np.hstack((x[~mask].reshape(sizeX,1), y[~mask].reshape(sizeX,1),
                         data[~mask].reshape(sizeX,1)))
-    # Coordinates of the bins
-    #    coords = np.asarray(np.meshgrid(pixX, pixY, pixV, indexing='ij'))
 
     # Deriving the LOSVDs via histograms
     if weights is None:
