@@ -299,12 +299,12 @@ def xy_cov_matrix2d(x, y, weights):
 
     momIX = (weights * x).sum() / momI
     momIY = (weights * y).sum() / momI
-    mu20 = (weights * x * x).sum() / momI - momIX**2
-    mu02 = (weights * y * y).sum() / momI - momIY**2
-    mu11 = (weights * x * y).sum() / momI - momIX * momIY
-    return np.array([[mu20, mu11], [mu11, mu02]])
+    a = (weights * x * x).sum() / momI - momIX**2
+    c = (weights * y * y).sum() / momI - momIY**2
+    b = (weights * x * y).sum() / momI - momIX * momIY
+    return np.array([[a, b], [b, c]])
 
-def characterise_ima2d(x, y, flux, nbins=30, fracflux=-5, facn=3):
+def characterise_ima2d(x, y, flux, nbins=30, minfrac=1.e-5, maxfrac=0.99, facn=3):
     """Characterise a 2d flux image
     """
 
@@ -316,29 +316,33 @@ def characterise_ima2d(x, y, flux, nbins=30, fracflux=-5, facn=3):
     pa = np.zeros_like(eps)
     flux_prof = np.zeros_like(eps)
 
-    flux_samp = np.logspace(fracflux, np.log10(0.99), nbins*facn) * np.max(flux)
+    flux_samp = (np.logspace(np.log10(minfrac), np.log10(maxfrac), 
+                             nbins*facn) * np.max(flux))[::-1]
+    # Going from centre to outer parts - R increasing
     for i, g in enumerate(flux_samp):
-        xd, yd, fd, [radi, epsd, pad] = morph_ima2d(x, y, flux, ground=g)
+        xd, yd, fd, [radi, l1, l2, epsd, pad] = morph_ima2d(x, y, flux, ground=g)
         prof[i] = fd.sum()
         rad[i] = radi
 
     # Select the ante penultieme value
-    ind_rad = len(rad[rad == np.max(rad)]) -1
-    if ind_rad < 0:
+    ind_rad = np.argwhere(rad == np.max(rad))
+    if len(ind_rad) < 0:
         print("Problem selecting valid pixels")
         return [0], [0], [0], [0], 0.
+    # If found
+    ind_rad = ind_rad[0][0]
 
-    sel_rad = (rad[ind_rad:] > 0.)
-    inv_cumf = interp1d(prof[ind_rad:][sel_rad], rad[ind_rad:][sel_rad])
-    ground_func = interp1d(rad[ind_rad:][sel_rad], flux_samp[ind_rad:][sel_rad])
+    sel_rad = (rad[:ind_rad] > 0.)
+    inv_cumf = interp1d(prof[:ind_rad][sel_rad], rad[:ind_rad][sel_rad])
+    ground_func = interp1d(rad[:ind_rad][sel_rad], flux_samp[:ind_rad][sel_rad])
     re_50 = inv_cumf(tflux / 2.)
 
     # reinterpolating the profiles
-    rsample = np.linspace(np.min(rad[ind_rad:][sel_rad]), 
-                          np.max(rad[ind_rad:][sel_rad]), nbins)
+    rsample = np.linspace(np.min(rad[:ind_rad][sel_rad]), 
+                          np.max(rad[:ind_rad][sel_rad]), nbins)
     for i, r in enumerate(rsample):
         flux_prof[i] = ground_func(r)
-        xd, yd, fd, [radi, eps[i], pa[i]] = morph_ima2d(x, y, flux, ground=flux_prof[i])
+        xd, yd, fd, [radi, l1, l2, eps[i], pa[i]] = morph_ima2d(x, y, flux, ground=flux_prof[i])
 
     inv_pa = interp1d(rsample, pa)
     inv_eps = interp1d(rsample, eps)
@@ -346,6 +350,35 @@ def characterise_ima2d(x, y, flux, nbins=30, fracflux=-5, facn=3):
     pa_50 = inv_pa(re_50)
 
     return rsample, flux_prof, eps, pa, re_50, eps_50, pa_50
+
+def guess_stepx(xarray):
+    pot_step = np.array([np.min(np.abs(np.diff(xarray, axis=i))) for i in range(xarray.ndim)])
+    return np.min(pot_step[pot_step > 0.])
+
+def guess_stepxy(Xin, Yin, index_range=[0,100], verbose=False) :
+    """Guess the step from a 1 or 2D grid
+    Using the distance between points for the range of points given by
+    index_range
+
+    Parameters:
+    -----------
+    Xin, Yin: input (float) arrays
+    index_range : tuple or array of 2 integers providing the min and max indices = [min, max]
+            default is [0,100] to make it faster
+    verbose: default is False
+
+    Returns
+    -------
+    step : guessed step (float)
+    """
+    # Stacking the first 100 points of the grid and determining the distance
+    stackXY = np.vstack((Xin.ravel()[index_range[0]: index_range[1]], Yin.ravel()[index_range[0]: index_range[1]]))
+    diffXY = np.unique(distance.pdist(stackXY.T))
+    step = np.min(diffXY[diffXY > 0])
+    if verbose:
+        print("New step will be %s"%(step))
+
+    return step
 
 def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
     """Derive the morphology of an image after selecting
@@ -367,11 +400,14 @@ def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
     selp = (flux > ground) & (flux < ceiling)
     xs = x[selp]
     ys = y[selp]
+    dx = guess_stepx(x)
+    dy = guess_stepx(y)
     fs = flux[selp]
 
     covmat = xy_cov_matrix2d(xs, ys, fs)
     l1, l2, eps, pa = comp_pa_eps(covmat)
-    return xs, ys, fs, [np.sqrt(l1 * l2), eps, pa]
+    rad = np.sqrt(xs.size * dx * dy / np.pi)
+    return xs, ys, fs, [rad, l1, l2, eps, pa]
      
 def comp_pa_eps(covmat):
     """Return the PA and Eps for a given set of covariance 
@@ -385,30 +421,30 @@ def comp_pa_eps(covmat):
     -------
     major, minor axes, eps, pa
     """
-    m20, m02, m11 = covmat[0,0], covmat[1,1], covmat[1,0]
+    m00, m11, m01 = covmat[0,0], covmat[1,1], covmat[1,0]
+    m01 = np.maximum(0., m01)
 
-    if m20 == m02:
-        return m20, m02, 0., 90
-
-    if m11 == 0 :
-       if m20 == 0. :
-          return m02, m20, 0., 0.
-       if m02 > m20 :
-          return m02, m20, 1. - np.sqrt(m20 / m02), 0.
+    if m01 == 0 :
+       if m00 == 0. :
+          return m11, m00, 0., 90.
+       if m11 > m00 :
+          return m11, m00, 1. - np.sqrt(m00 / m11), 0.
        else :
-          if m02 == 0.:
-             return m20, m02, 0., 0.
+          if m11 == 0.:
+             return m00, m11, 0., 90.
           else :
-             return m20, m02, 1. - np.sqrt(m02 / m20), 90.
+             return m00, m11, 1. - np.sqrt(m11 / m00), 90.
 
-    delta = (m20 - m02)**2. + 4 * m11**2
-    lambda1 = ((m20 + m02) + np.sqrt(delta)) / 2.
-    lambda2 = ((m20 + m02) - np.sqrt(delta)) / 2.
+    delta = (m00 - m11)**2. + 4 * m01**2
+    lambda0 = ((-m00 + m11) + np.sqrt(delta)) / 2.
+    lambda1 = ((m00 + m11) + np.sqrt(delta)) / 2.
+    lambda2 = ((m00 + m11) - np.sqrt(delta)) / 2.
     lp = np.sqrt(lambda1)
     lm = np.sqrt(np.maximum(lambda2,0.))
     if lp == 0. :
         eps = 1.
     else:
         eps = 1. - lm / lp
-    theta = np.rad2deg(0.5 * np.arctan(2.0 * m11 / (m20 - m02)))
+
+    theta = np.rad2deg(np.arctan2(lambda0, m01)) + 90.0
     return lp, lm, eps, theta
