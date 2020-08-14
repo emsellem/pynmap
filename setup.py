@@ -38,5 +38,5 @@ setup(name='pynmap',
       author_email='eric.emsellem@eso.org',
       maintainer='Eric Emsellem',
       url='http://',
-      packages=['pynmap'],
+      packages=['pynmap', 'pynmap.utils'],
      )

@@ -47,15 +47,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGE.
 
 """
-from .version import __date__, __version__
-
-import sys, os
-
-# Trying to import the various needed modules
-try : 
-    import astropy
-except ImportError: 
-    print('There is a problem with importing astropy at initialisation')
-
 # Import the different subfiles
-from . import pynmap, grid, misc_io, misc_functions, losvd
+__version__ = '0.0.1'
+__revision__ = '$Revision: 1.00 $'
+__date__ = '$Date: 20/08/10 15:05 $'
+
+__all__ = ['mpfit']
+

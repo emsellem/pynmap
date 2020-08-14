@@ -6,7 +6,6 @@ class to be used together with I/O
 ESO / CRAL: @ 2019
 Authors: Eric Emsellem
 """
-
 # general modules
 import copy
 import os
