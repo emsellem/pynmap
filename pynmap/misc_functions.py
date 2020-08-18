@@ -391,10 +391,11 @@ def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
 
     Returns
     -------
-    xs, ys, fs, [r, eps, pa]
+    xs, ys, fs, [r, l1, l2, eps, pa]
         which are:
         selected Xs, Ys, Fs arrays 
         and effective area radius, eps, pa
+        l1 and l2 being the major and minor axes
     """
     # selecting pixels which are above the threshold
     selp = (flux > ground) & (flux < ceiling)
