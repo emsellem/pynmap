@@ -304,23 +304,25 @@ def xy_cov_matrix2d(x, y, weights):
     b = (weights * x * y).sum() / momI - momIX * momIY
     return np.array([[a, b], [b, c]])
 
-def characterise_ima2d(x, y, flux, nbins=30, minfrac=1.e-5, maxfrac=0.99, facn=3):
+def characterise_ima2d(x, y, flux, nbins=30, minfrac=1.e-5, maxfrac=0.99, facn=3, mask=None):
     """Characterise a 2d flux image
     """
 
-    tflux = flux.sum()
     rad = np.zeros(nbins*facn)
     prof = np.zeros_like(rad)
 
     eps = np.zeros(nbins)
     pa = np.zeros_like(eps)
     flux_prof = np.zeros_like(eps)
+    if mask is None:
+        mask = (np.abs(flux) < 0)
+    tflux = flux[~mask].sum()
 
     flux_samp = (np.logspace(np.log10(minfrac), np.log10(maxfrac), 
-                             nbins*facn) * np.max(flux))[::-1]
+                             nbins * facn) * np.max(flux[~mask]))[::-1]
     # Going from centre to outer parts - R increasing
     for i, g in enumerate(flux_samp):
-        xd, yd, fd, [radi, l1, l2, epsd, pad] = morph_ima2d(x, y, flux, ground=g)
+        xd, yd, fd, [radi, l1, l2, epsd, pad] = morph_ima2d(x, y, flux, ground=g, mask=mask)
         prof[i] = fd.sum()
         rad[i] = radi
 
@@ -342,7 +344,7 @@ def characterise_ima2d(x, y, flux, nbins=30, minfrac=1.e-5, maxfrac=0.99, facn=3
                           np.max(rad[:ind_rad][sel_rad]), nbins)
     for i, r in enumerate(rsample):
         flux_prof[i] = ground_func(r)
-        xd, yd, fd, [radi, l1, l2, eps[i], pa[i]] = morph_ima2d(x, y, flux, ground=flux_prof[i])
+        xd, yd, fd, [radi, l1, l2, eps[i], pa[i]] = morph_ima2d(x, y, flux, ground=flux_prof[i], mask=mask)
 
     inv_pa = interp1d(rsample, pa)
     inv_eps = interp1d(rsample, eps)
@@ -380,7 +382,7 @@ def guess_stepxy(Xin, Yin, index_range=[0,100], verbose=False) :
 
     return step
 
-def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
+def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf, mask=None):
     """Derive the morphology of an image after selecting
     the given glux
 
@@ -398,7 +400,10 @@ def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
         l1 and l2 being the major and minor axes
     """
     # selecting pixels which are above the threshold
-    selp = (flux > ground) & (flux < ceiling)
+    if mask is None:
+        mask = (np.abs(flux) < 0)
+
+    selp = (flux > ground) & (flux < ceiling) & (~mask)
     xs = x[selp]
     ys = y[selp]
     dx = guess_stepx(x)
@@ -410,7 +415,7 @@ def morph_ima2d(x, y, flux, ground=0., ceiling=np.inf):
     rad = np.sqrt(xs.size * dx * dy / np.pi)
     return xs, ys, fs, [rad, l1, l2, eps, pa]
      
-def comp_pa_eps(covmat):
+def comp_pa_eps(covmat, threshold=1.e-10):
     """Return the PA and Eps for a given set of covariance 
     parameters
 
@@ -423,7 +428,9 @@ def comp_pa_eps(covmat):
     major, minor axes, eps, pa
     """
     m00, m11, m01 = covmat[0,0], covmat[1,1], covmat[1,0]
-    m01 = np.maximum(0., m01)
+
+    if m00 < threshold : m00 = 0.
+    if m11 < threshold : m11 = 0.
 
     if m01 == 0 :
        if m00 == 0. :
