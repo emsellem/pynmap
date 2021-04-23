@@ -245,3 +245,105 @@ def vector_xy_to_rtheta(x, y, Vx, Vy):
     Vtheta = -Vx * np.sin(theta) + Vy * np.cos(theta)
     return R, theta, VR, Vtheta
 
+# Set of functions to transform into Sun-view - 2021/Apr
+# Adapted from Mattia Sormani's input formulae in python
+def xyzsunhat(xsun, ysun, zsun):
+    """Return the x, y, z hat components in the xyz frame
+
+    Input
+    -----
+    xsun, ysun, zsun: x, y, z location for the Sun
+
+    Returns
+    -------
+    xhat, yhat, zhat
+    """
+    rsun = np.sqrt(xsun**2 + ysun**2 + zsun**2)
+    Rsun = np.sqrt(xsun**2 + ysun**2)
+    sintheta = Rsun / rsun
+    costheta = zsun / rsun
+    sinphi   = ysun / Rsun
+    cosphi   = xsun / Rsun 
+    xhat = np.array([-cosphi * sintheta, 
+                     -sinphi * sintheta, -costheta])
+    yhat = np.array([+sinphi, -cosphi, +0.0])
+    zhat = np.array([-cosphi * costheta, 
+                     -sinphi * costheta, +sintheta])
+    return xhat, yhat, zhat
+
+def rblhat(l, b, r):
+    """Return r, b and l hat components in the xyz frame
+
+    Input
+    -----
+    l, b, r: input galactic coordinates
+
+    Returns
+    -------
+    rhat, bhat, lhat    
+    """
+    theta = np.pi / 2. - b
+    rhat  = [+np.sin(theta) * np.cos(l), 
+             +np.sin(theta) * np.sin(l), 
+             + np.cos(theta)]
+    bhat  = [-np.cos(theta) * np.cos(l), 
+            -np.cos(theta) * np.sin(l), 
+            + np.sin(theta)] 
+    lhat  = [-np.sin(l), np.cos(l), 0.]
+    return rhat, bhat, lhat
+
+def xyz2xyzsun(x, y, z, vx, vy, vz,
+            xsun=-8.0, ysun=0.0, zsun=0.0,
+            vxsun=0.0, vysun=2.2, vzsun=0.0):
+    xhat, yhat, zhat = xyzsunhat(xsun, ysun, zsun)
+    deltaxyz = np.array([x - xsun, y - ysun, z - zsun])
+    deltavxyz = np.array([vx - vxsun, vy - vysun, vz - vzsun])
+    xs, ys, zs = np.array([xhat, yhat, zhat]) @ deltaxyz
+    vxs, vys, vzs = np.array([xhat, yhat, zhat]) @ deltavxyz
+    return xs, ys, zs, vxs, vys, vzs
+
+def xyzsun2xyz(xs, ys, zs, vxs, vys, vzs, 
+               xsun=-8.0, ysun=0.0, zsun=0.0,
+               vxsun=0.0, vysun=2.2, vzsun=0.0):
+    xhat, yhat, zhat = xyzsunhat(xsun, ysun, zsun)
+    deltaxyz = np.array([xs, ys, zs]) @ np.array([xhat, yhat, zhat])
+    deltavxyz = np.array([vxs, vys, vzs]) @ np.array([xhat, yhat, zhat])
+    x, y, z  = deltaxyz + np.array([xsun, ysun, zsun])
+    vx, vy, vz  = deltavxyz + np.array([vxsun, vysun, vzsun])
+    return x, y, z, vx, vy, vz
+
+def xyzsun2lbr(xs, ys, zs, vxs, vys, vzs):
+    r     = np.sqrt(xs**2 + ys**2 + zs**2)
+    l     = np.arctan2(ys, xs)
+    theta = np.arccos(zs / r)
+    b     = np.pi / 2. - theta
+    rhat, bhat, lhat = rblhat(l, b, r)
+    vr, vb, vl = np.array([rhat, bhat, lhat]) @ np.array([vxs, vys, vzs])
+    return l, b, r, vl, vb, vr
+
+def lbr2xyzsun(l, b, r, vl, vb, vr):
+    theta = np.pi / 2. - b
+    rhat, bhat, lhat = rblhat(l, b, r)
+    xs  = r * np.sin(theta) * np.cos(l)
+    ys  = r * np.sin(theta) * np.sin(l)
+    zs  = r * np.cos(theta)
+    vxs, vys, vzs = np.array([vr, vl, vb]) @ np.array([rhat, lhat, bhat])
+    return xs, ys, zs, vxs, vys, vzs
+
+def xyz2lbr(x, y, z, vx, vy, vz,
+            xsun=-8.0, ysun=0.0, zsun=0.0,
+            vxsun=0.0, vysun=2.2, vzsun=0.0):
+    xs, ys, zs, vxs, vys, vzs = xyz2xyzsun(x, y, z, vx, vy, vz,
+                                xsun,ysun,zsun,
+                                vxsun,vysun,vzsun)
+    l, b, r, vl, vb, vr = xyzsun2lbr(xs, ys, zs, vxs, vys, vzs)
+    return l, b, r, vl, vb, vr
+
+def lbr2xyz(l, b, r, vl, vb, vr, 
+            xsun=-8.0, ysun=0.0, zsun=0.0,
+            vxsun=0.0, vysun=2.2, vzsun=0.0):
+    xs, ys, zs, vxs, vys, vzs = lbr2xyzsun(l, b, r, vl, vb, vr)
+    x, y, z, vx, vy, vz = xyzsun2xyz(xs, ys, zs, vxs, vys, vzs, 
+                                     xsun, ysun, zsun, 
+                                     vxsun, vysun, vzsun)
+    return x, y, z, vx, vy, vz
